@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ANOMALÍAS: HOSPITAL</title>
+<style>
+:root{
+  --fondo:#06070a; --panel:rgba(8,10,12,.78); --hueso:#cdd2c9; --tenue:#7d857e; --verde:#7fa592; --verde-osc:#2a3a33;
+  --sangre:#a32323; --ambar:#d2a94a; --papel:#c9c3b0;
+  --ui:"Bahnschrift","Segoe UI","Helvetica Neue","Arial Narrow",Arial,sans-serif;
+  --maquina:"Courier New",Courier,monospace;
+  --u:clamp(11px, .55vw + .75vh + 4px, 18px);   /* unidad base: escala la interfaz con la resolución */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--fondo);color:var(--hueso);font-family:var(--ui);font-size:var(--u);overflow:hidden;user-select:none}
+#juego,#juego canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+/* ---------- Capas de ambiente (muy sutiles) ---------- */
+.capa{position:fixed;inset:0;pointer-events:none}
+#ruido{z-index:60;opacity:.055;mix-blend-mode:overlay;animation:ruido .9s steps(5) infinite;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+@keyframes ruido{0%{background-position:0 0}25%{background-position:-40px 22px}50%{background-position:30px -35px}75%{background-position:-18px -12px}100%{background-position:10px 40px}}
+#scan{z-index:61;opacity:.05;background:repeating-linear-gradient(to bottom,transparent 0 2px,rgba(0,0,0,.9) 2px 3px)}
+#vineta{z-index:59;background:radial-gradient(ellipse at center,transparent 52%,rgba(0,0,0,.62) 100%)}
+#peligro{z-index:58;opacity:0;background:radial-gradient(ellipse at center,transparent 40%,rgba(140,10,10,.55) 100%);transition:opacity .25s}
+#parpadeo{z-index:57;opacity:0;background:#000}
+
+/* ---------- Pantallas ---------- */
+.pantalla{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;padding:4vmin}
+.pantalla.on{display:flex}
+.fondo-hospital{
+  background:
+    radial-gradient(ellipse at 30% 40%,rgba(30,42,36,.0),rgba(0,0,0,.85) 80%),
+    repeating-linear-gradient(0deg,transparent 0 5.2vmin,rgba(127,165,146,.055) 5.2vmin calc(5.2vmin + 1px)),
+    repeating-linear-gradient(90deg,transparent 0 5.2vmin,rgba(127,165,146,.055) 5.2vmin calc(5.2vmin + 1px)),
+    linear-gradient(180deg,#0c100e,#050606);
+}
+.fondo-hospital::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse 30% 45% at 78% 105%,rgba(110,15,15,.22),transparent 70%),radial-gradient(ellipse 25% 30% at 10% -5%,rgba(120,150,135,.08),transparent 70%)}
+.velo{background:rgba(2,3,4,.72);backdrop-filter:blur(3px)}
+
+#menu{justify-content:flex-start;padding-left:max(6vw,5vmin);background:linear-gradient(90deg,rgba(4,5,6,.93) 0%,rgba(4,5,6,.78) 40%,rgba(4,5,6,.1) 75%)}
+.bloque{max-width:34em;position:relative;z-index:1}
+.cruz{width:2.6em;height:2.6em;margin-bottom:1.2em;opacity:.85}
+h1.titulo{font-weight:700;font-size:clamp(34px,6.6vw,92px);letter-spacing:.09em;line-height:.95;text-transform:uppercase;color:#dfe3da;
+  text-shadow:0 0 .35em rgba(160,30,30,.35);position:relative;animation:titulo 7s infinite}
+h1.titulo b{display:block;font-weight:600;font-size:.42em;letter-spacing:.42em;color:var(--sangre);margin-top:.45em;text-shadow:none}
+@keyframes titulo{0%,93%,100%{transform:none;filter:none}94%{transform:translateX(.02em);filter:drop-shadow(-.03em 0 rgba(255,40,40,.55)) drop-shadow(.03em 0 rgba(60,220,220,.4))}95%{transform:translateX(-.03em)}96%{transform:none;filter:none}}
+.lema{margin:1.4em 0 2em;color:var(--tenue);letter-spacing:.14em;font-size:.95em;text-transform:uppercase}
+.botones{display:flex;flex-direction:column;gap:.7em;align-items:stretch;width:min(21em,80vw)}
+.btn{font:inherit;font-size:1.15em;letter-spacing:.2em;text-transform:uppercase;color:var(--hueso);background:rgba(10,14,12,.55);
+  border:1px solid rgba(127,165,146,.28);border-left:3px solid var(--verde-osc);padding:.85em 1.2em;text-align:left;cursor:pointer;transition:.18s}
+.btn:hover,.btn:focus-visible{outline:none;border-left-color:var(--sangre);background:rgba(40,12,12,.55);color:#fff;padding-left:1.6em}
+.btn.mini{font-size:.95em;padding:.55em .9em;text-align:center;letter-spacing:.12em}
+.fila{display:flex;gap:.5em;align-items:center;margin-top:1.4em;color:var(--tenue);font-size:.85em;letter-spacing:.12em;text-transform:uppercase;flex-wrap:wrap}
+.fila .btn.mini{min-width:2.8em}
+.pie{position:absolute;left:max(6vw,5vmin);bottom:3vmin;color:#4d544f;font-size:.8em;letter-spacing:.1em}
+
+.panel{position:relative;z-index:1;background:var(--panel);border:1px solid rgba(127,165,146,.22);padding:2.2em 2.6em;max-width:min(44em,92vw);max-height:92vh;overflow:auto;box-shadow:0 0 5em rgba(0,0,0,.7)}
+.panel h2{font-weight:600;font-size:1.9em;letter-spacing:.22em;text-transform:uppercase;margin-bottom:.35em}
+.panel h2.rojo{color:var(--sangre)}
+.panel .cuerpo{color:#aab1a9;line-height:1.65;margin:.8em 0 1.6em;font-size:1.05em;white-space:pre-line}
+.panel .botones{width:100%}
+.controles{display:grid;grid-template-columns:auto 1fr;gap:.55em 1.4em;margin:1.2em 0 1.4em;font-size:1.05em}
+.controles kbd{font-family:var(--maquina);border:1px solid rgba(127,165,146,.4);border-bottom-width:2px;padding:.1em .55em;color:var(--hueso);background:rgba(0,0,0,.4);text-align:center;min-width:2.4em;display:inline-block}
+.controles span{color:#aab1a9;align-self:center}
+#carga h2{letter-spacing:.3em;font-weight:500;font-size:1.3em;color:var(--tenue)}
+#carga .barra{width:min(22em,70vw);height:2px;background:#1a201d;margin:1.2em auto 0}
+#carga .barra i{display:block;height:100%;width:0;background:var(--verde);transition:width .15s}
+#cargaTxt{margin-top:1em;color:#5d655f;font-size:.9em;text-align:center;max-width:28em;line-height:1.5}
+
+/* ---------- HUD (discreto) ---------- */
+#hud{position:fixed;inset:0;z-index:30;pointer-events:none;display:none;
+  padding:max(2.2vmin,env(safe-area-inset-top)) max(2.2vmin,env(safe-area-inset-right)) max(2.2vmin,env(safe-area-inset-bottom)) max(2.2vmin,env(safe-area-inset-left))}
+#hud.on{display:block}
+#objetivo{position:absolute;left:max(2.2vmin,env(safe-area-inset-left));top:max(2.2vmin,env(safe-area-inset-top));max-width:24em;
+  border-left:2px solid rgba(163,35,35,.8);padding:.15em 0 .15em .8em;text-shadow:0 1px 4px #000}
+#objetivo small{display:block;color:var(--tenue);letter-spacing:.3em;font-size:.72em;text-transform:uppercase}
+#objTxt{font-size:1.1em;letter-spacing:.04em;line-height:1.35;color:#dfe3da}
+#objPista{color:var(--tenue);font-size:.85em;margin-top:.25em}
+#estado{position:absolute;left:max(2.2vmin,env(safe-area-inset-left));bottom:max(2.2vmin,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:.55em;
+  text-shadow:0 1px 4px #000;font-size:.9em}
+.fila-hud{display:flex;align-items:center;gap:.7em;opacity:.85}
+.fila-hud label{width:6.2em;color:var(--tenue);letter-spacing:.2em;font-size:.78em;text-transform:uppercase}
+.celdas{display:flex;gap:.18em}
+.celdas i{width:.75em;height:1.1em;background:rgba(127,165,146,.14);border:1px solid rgba(127,165,146,.25)}
+.celdas i.on{background:var(--verde);border-color:var(--verde)}
+.celdas.baja i.on{background:var(--sangre);border-color:var(--sangre)}
+.celdas.parp{animation:parp .5s steps(2) infinite}
+@keyframes parp{50%{opacity:.3}}
+.barra-ext{width:7.5em;height:.55em;background:rgba(127,165,146,.14);border:1px solid rgba(127,165,146,.25)}
+.barra-ext i{display:block;height:100%;width:100%;background:#c9cfc6;transition:width .1s}
+#filaExt.rojo .barra-ext i{background:var(--sangre)}
+.pct{font-family:var(--maquina);font-size:.85em;color:var(--tenue);min-width:3em}
+#llaveIcono{width:1.25em;height:1.25em;opacity:.25;transition:.3s}
+#llaveIcono.on{opacity:1;filter:drop-shadow(0 0 .35em rgba(210,169,74,.55))}
+#llaveTxt{font-size:.85em;color:var(--tenue)}
+#llaveTxt.on{color:var(--ambar)}
+#centro{position:absolute;left:50%;bottom:17%;transform:translateX(-50%);text-align:center;width:min(40em,90vw);text-shadow:0 1px 6px #000,0 0 12px #000}
+#prompt{font-size:1.1em;letter-spacing:.08em;color:#e6eae1;min-height:1.4em}
+#prompt kbd{font-family:var(--maquina);border:1px solid rgba(230,234,225,.55);padding:0 .45em;margin-right:.5em;background:rgba(0,0,0,.5)}
+#mantener{width:11em;height:.35em;background:rgba(255,255,255,.12);margin:.7em auto 0;display:none}
+#mantener i{display:block;height:100%;width:0;background:var(--ambar)}
+#msg{margin-top:.6em;font-size:1.02em;color:var(--ambar);letter-spacing:.05em;min-height:1.3em;opacity:0;transition:opacity .5s}
+#msg.on{opacity:1}
+#mira{position:absolute;left:50%;top:50%;width:.28em;height:.28em;margin:-.14em;background:rgba(255,255,255,.45);border-radius:50%}
+#pistaClic{position:absolute;left:50%;top:58%;transform:translateX(-50%);color:var(--tenue);letter-spacing:.22em;font-size:.85em;text-transform:uppercase;display:none}
+#capitulo{position:fixed;left:0;right:0;top:36%;text-align:center;z-index:35;pointer-events:none;opacity:0;transition:opacity 1.2s}
+#capitulo.on{opacity:1}
+#capitulo small{letter-spacing:.5em;color:var(--sangre);font-size:.85em;text-transform:uppercase}
+#capitulo h3{font-weight:500;font-size:2.4em;letter-spacing:.3em;text-transform:uppercase;margin:.3em 0;color:#d8dcd3;text-shadow:0 0 .5em #000}
+#capitulo p{color:var(--tenue);letter-spacing:.2em;font-size:.9em;text-transform:uppercase}
+
+/* ---------- Documento (notas/expediente) ---------- */
+#nota .papel{position:relative;z-index:1;width:min(34em,90vw);max-height:88vh;overflow:auto;padding:2.4em 2.6em;color:#26241e;background:
+  repeating-linear-gradient(0deg,transparent 0 1.7em,rgba(60,50,30,.08) 1.7em calc(1.7em + 1px)),linear-gradient(135deg,#cfc9b6,#b9b39f);
+  box-shadow:0 0 4em #000,inset 0 0 3em rgba(60,40,10,.35);transform:rotate(-.4deg);font-family:var(--maquina)}
+#nota h4{font-size:1.15em;letter-spacing:.12em;border-bottom:2px solid #26241e;padding-bottom:.4em;margin-bottom:1em;text-transform:uppercase}
+#nota p{white-space:pre-line;line-height:1.7;font-size:1.02em}
+#nota .cierra{margin-top:1.6em;font-size:.8em;color:#5b5646;letter-spacing:.15em;text-align:right}
+
+@media (max-height:520px){.panel{padding:1.2em 1.6em}.lema{margin:.8em 0 1em}.cruz{display:none}}
+@media (max-width:700px){#menu{background:rgba(4,5,6,.88)}.panel{padding:1.4em}}
+</style>
+</head>
+<body>
+<div id="juego"></div>
+
+<!-- Capas de ambiente -->
+<div id="vineta" class="capa"></div><div id="peligro" class="capa"></div><div id="parpadeo" class="capa"></div>
+<div id="scan" class="capa"></div><div id="ruido" class="capa"></div>
+
+<!-- MENÚ PRINCIPAL -->
+<div id="menu" class="pantalla">
+  <div class="bloque">
+    <svg class="cruz" viewBox="0 0 48 48" aria-hidden="true"><path d="M18 4h12v14h14v12H30v14H18V30H4V18h14z" fill="none" stroke="#a32323" stroke-width="2.2"/><ellipse cx="24" cy="24" rx="7" ry="4" fill="none" stroke="#cdd2c9" stroke-width="1.4"/><circle cx="24" cy="24" r="1.8" fill="#a32323"/></svg>
+    <h1 class="titulo">ANOMALÍAS<b>: HOSPITAL</b></h1>
+    <p class="lema">Hospital San Ébano · Ala de Observación</p>
+    <div class="botones">
+      <button class="btn" id="btnJugar">Jugar</button>
+      <button class="btn" id="btnInstr">Instrucciones</button>
+      <button class="btn" id="btnFS">Pantalla completa</button>
+    </div>
+    <div class="fila">Capítulo:
+      <button class="btn mini" data-cap="0">I</button><button class="btn mini" data-cap="1">II</button><button class="btn mini" data-cap="2">III</button>
+    </div>
+  </div>
+  <div class="pie">Usa auriculares · Mejor en pantalla completa</div>
+</div>
+
+<!-- INSTRUCCIONES -->
+<div id="instrucciones" class="pantalla fondo-hospital velo">
+  <div class="panel">
+    <h2>Instrucciones</h2>
+    <div class="controles">
+      <kbd>W A S D</kbd><span>Moverte (mantén <kbd>Shift</kbd> para correr)</span>
+      <kbd>Ratón</kbd><span>Mirar alrededor (haz clic para capturar el ratón)</span>
+      <kbd>E</kbd><span>Interactuar: recoger, leer, usar la tarjeta, arrancar el generador (mantener)</span>
+      <kbd>F</kbd><span>Encender / apagar la linterna (consume batería)</span>
+      <kbd>Clic izq.</kbd><span>Rociar con el extintor cuando lo lleves equipado</span>
+      <kbd>Esc</kbd><span>Pausa</span>
+    </div>
+    <div class="cuerpo">Sobrevive a tres capítulos. Busca la llave, evita a El Custodio y averigua qué le pasó al hospital.
+La linterna es tu mejor aliada, pero su luz no es eterna. El extintor apaga el fuego y aturde a lo que te persigue.</div>
+    <div class="botones"><button class="btn" id="btnInstrVolver">Volver</button></div>
+  </div>
+</div>
+
+<!-- PAUSA -->
+<div id="pausa" class="pantalla velo">
+  <div class="panel" style="min-width:min(26em,90vw)">
+    <h2>Pausa</h2>
+    <div class="cuerpo" id="pausaObj" style="margin-bottom:1.2em"></div>
+    <div class="botones">
+      <button class="btn" id="btnContinuar">Continuar</button>
+      <button class="btn" id="btnReiniciar">Reiniciar nivel</button>
+      <button class="btn" id="btnInstrPausa">Instrucciones</button>
+      <button class="btn" id="btnFS2">Pantalla completa</button>
+      <button class="btn" id="btnMenuPausa">Volver al menú</button>
+    </div>
+  </div>
+</div>
+
+<!-- VICTORIA DE NIVEL -->
+<div id="victoria" class="pantalla velo">
+  <div class="panel">
+    <h2 id="vicTitulo">Nivel completado</h2>
+    <div class="cuerpo" id="vicTxt"></div>
+    <div class="botones"><button class="btn" id="btnSiguiente">Continuar</button><button class="btn" id="btnMenuVic">Volver al menú</button></div>
+  </div>
+</div>
+
+<!-- DERROTA -->
+<div id="derrota" class="pantalla velo" style="background:rgba(25,2,2,.82)">
+  <div class="panel">
+    <h2 class="rojo">Te alcanzó</h2>
+    <div class="cuerpo" id="derTxt"></div>
+    <div class="botones"><button class="btn" id="btnReintentar">Reintentar nivel</button><button class="btn" id="btnMenuDer">Volver al menú</button></div>
+  </div>
+</div>
+
+<!-- FINAL -->
+<div id="final" class="pantalla fondo-hospital">
+  <div class="panel" style="max-width:min(40em,92vw)">
+    <h2>Fin</h2>
+    <div class="cuerpo" id="finTxt"></div>
+    <div class="botones"><button class="btn" id="btnMenuFin">Volver al menú</button></div>
+  </div>
+</div>
+
+<!-- CARGA -->
+<div id="carga" class="pantalla fondo-hospital" style="z-index:70">
+  <div style="text-align:center"><h2 id="cargaTit">Cargando…</h2><div class="barra"><i id="cargaBarra"></i></div><div id="cargaTxt"></div></div>
+</div>
+
+<!-- NOTA / DOCUMENTO -->
+<div id="nota" class="pantalla velo" style="z-index:40"><div class="papel"><h4 id="notaTit"></h4><p id="notaTxt"></p><div class="cierra">[E] CERRAR</div></div></div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="objetivo"><small>Objetivo</small><div id="objTxt"></div><div id="objPista"></div></div>
+  <div id="estado">
+    <div class="fila-hud" id="filaLin"><label>Linterna</label><div class="celdas" id="celdas"></div><span class="pct" id="pctLin"></span></div>
+    <div class="fila-hud" id="filaExt" style="display:none"><label>Extintor</label><div class="barra-ext"><i id="extBarra"></i></div><span class="pct" id="pctExt"></span></div>
+    <div class="fila-hud"><label>Llave</label>
+      <svg id="llaveIcono" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="11" rx="1.5" fill="none" stroke="#d2a94a" stroke-width="1.6"/><rect x="5" y="10" width="5" height="3.5" fill="#d2a94a"/><path d="M12 11h6M12 14h4" stroke="#d2a94a" stroke-width="1.4"/></svg>
+      <span id="llaveTxt">no tienes</span></div>
+  </div>
+  <div id="centro"><div id="prompt"></div><div id="mantener"><i id="mantenerBarra"></i></div><div id="msg"></div></div>
+  <div id="mira"></div>
+  <div id="pistaClic">Haz clic para controlar la cámara</div>
+</div>
+<div id="capitulo"><small id="capNum"></small><h3 id="capTit"></h3><p id="capLugar"></p></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+/* BVH opcional: acelera mucho las colisiones. Si no carga, el juego funciona igual (más lento). */
+try{
+  const m = await import('https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.7.3/build/index.module.js');
+  THREE.BufferGeometry.prototype.computeBoundsTree = m.computeBoundsTree;
+  THREE.Mesh.prototype.raycast = m.acceleratedRaycast;
+}catch(e){ console.warn('three-mesh-bvh no disponible:', e); }
+
+/* =====================================================================
+   1) CONFIGURACIÓN GLOBAL  — parámetros generales fáciles de modificar
+   ===================================================================== */
+const CONFIG = {
+  escala: 0.018,                       // unidades de tus GLB de nivel → metros (si ves el escenario muy grande/pequeño, cambia esto)
+  jugador:  { radio:.35, ojos:1.6, caminar:3.0, correr:5.2, sens:.0022 },
+  linterna: { intensidad:45, distancia:24, angulo:.5, penumbra:.55, drenaje:.55, bateriaExtra:45, bajo:15 }, // drenaje = % por segundo
+  extintor: { consumo:14, alcance:5, aturdir:4, dañoFuego:.4 },       // consumo = % por segundo
+  distancias:{ recoger:1.3, usar:2.2 },
+  contactoEnemigo: .8,
+};
+const E = CONFIG.escala;
+
+/* =====================================================================
+   2) NIVELES — todo lo de cada nivel vive aquí (posiciones en UNIDADES del GLB)
+   x,z = posición en el plano · y = altura (opcional) · yaw: 0 mira al -Z, π/2 mira al -X, π mira al +Z
+   ===================================================================== */
+const NIVELES = [
+/* ---------------------------- NIVEL 1 ---------------------------- */
+{
+  id:1, capitulo:'Capítulo I', titulo:'Exploración', lugar:'Ala de Observación · Planta 1',
+  archivo:'assets/N1.glb',
+  ambiente:{ color:0x8a90a8, nivel:.42, niebla:.05, fondo:0x050508 },
+  spawn:{ x:790, z:0, yaw:Math.PI/2 },
+  inicial:{ linterna:false, bateria:100, extintor:false, carga:0, llave:false },
+  intro:'Despiertas en el suelo de un pasillo. El hospital está en silencio… demasiado.',
+  luces:[
+    { id:'puerta', x:22, y:70, z:87,  color:0xff3a2a, int:2.5, dist:7, parpadeo:true },
+    { id:'fondo',  x:620, y:110, z:0, color:0x9bb7ff, int:1.4, dist:10, parpadeo:true },
+  ],
+  pickups:[
+    { id:'linterna', tipo:'linterna', x:755, z:-95 },
+    { id:'bat1',     tipo:'bateria',  x:560, z:-85 },
+    { id:'llave',    tipo:'llave',    x:422, z:60, sobre:true },     // sobre la camilla
+  ],
+  notas:[
+    { x:36,  z:40,  titulo:'Aviso al personal', texto:'El Ala de Observación permanece CERRADA fuera de horario.\n\nNo responda a llamadas procedentes de la habitación 13.' },
+    { x:36,  z:66,  titulo:'Paciente 0613', texto:'Ingreso: 14/10/1998.\nSin antecedentes.\n\nRepite una sola frase, noche tras noche:\n"Aquí hay alguien más."' },
+    { x:36,  z:86,  titulo:'Silencio', texto:'SILENCIO.\n\nLos pacientes escuchan.' },
+    { x:36,  z:104, titulo:'Protocolo de contención', texto:'Si observa una figura alta al final del pasillo, NO la mire fijamente.\n\nApague su luz. Retroceda despacio.' },
+    { x:430, z:40,  titulo:'Quirófano 2', texto:'CLAUSURADO.\n\nTodas las puertas de acceso requieren tarjeta magnética nivel B.' },
+  ],
+  lector:{ x:8, y:52, z:40, consume:true },            // lector del GLB (Caja Llave Acceso)
+  puerta:{ tipo:'glb', nombre:/^puerta acceso/i, bisagra:{x:7, z:118}, giro:-1, salida:{x:7, z:87} },
+  fuegos:[], enemigos:[],
+  objetivos:[
+    { texto:'Busca algo con qué iluminarte.',          pista:'Hay algo en el suelo, cerca de donde despertaste.', hecho:g=>g.inv.linterna },
+    { texto:'Encuentra una tarjeta de acceso.',        pista:'Avanza por el pasillo. Lee los carteles si te atreves.', hecho:g=>g.inv.llave || g.S.abierta },
+    { texto:'Abre la puerta de acceso con la tarjeta.', pista:'El lector está junto a la puerta, al final del pasillo.', hecho:g=>g.S.abierta },
+    { texto:'Cruza la puerta.',                         pista:'', hecho:g=>false },
+  ],
+  eventos:[
+    { id:'encuentro', cond:g=>g.xu<600 && g.inv.linterna,
+      accion:g=>{ g.mensaje('Las luces parpadean…',3000); g.apagon(2.4,()=>{ g.entidad({ x:150, z:0, seg:9, cerca:7 }); g.mensaje('Hay alguien al fondo del pasillo.',4000); }); } },
+  ],
+  victoria:{ titulo:'Nivel completado', texto:'La puerta cede con un quejido metálico. El lector se traga la tarjeta.\n\nAl otro lado, un ala que no aparece en ningún plano… y unos pasos que no son los tuyos.' },
+  alSalir:inv=>{ inv.llave=false; },                   // el lector retiene la tarjeta
+},
+
+/* ---------------------------- NIVEL 2 ---------------------------- */
+{
+  id:2, capitulo:'Capítulo II', titulo:'La llave', lugar:'Recepción · Ala Oeste',
+  archivo:'assets/NIVEL_2.glb',
+  ambiente:{ color:0x9a8c8c, nivel:.32, niebla:.06, fondo:0x060506 },
+  spawn:{ x:300, z:0, yaw:Math.PI/2 },
+  inicial:{ linterna:true, bateria:75, extintor:false, carga:0, llave:false },
+  intro:'La recepción. Alguien dejó la llave de seguridad en el mostrador… y algo la vigila.',
+  luces:[
+    { id:'salida', x:-318, y:80, z:0,  color:0xff3a2a, int:2.6, dist:8, parpadeo:true },
+    { id:'mostrador', x:-52, y:100, z:0, color:0xa9c9b6, int:1.1, dist:9, parpadeo:true },
+  ],
+  pickups:[
+    { id:'extintor', tipo:'extintor', x:-70, y:62, z:132, ocultar:/^extintor/i },   // el extintor de pared del GLB
+    { id:'bat1',     tipo:'bateria',  x:230, z:70 },
+    { id:'bat2',     tipo:'bateria',  x:-150, z:-100 },
+    { id:'llave',    tipo:'llave',    x:-52, z:0, sobre:true },                      // sobre el mostrador
+  ],
+  notas:[
+    { x:290,  z:0,   titulo:'Plano de evacuación', texto:'SALIDA DE SERVICIO: extremo OESTE.\n\nAcceso restringido. Requiere llave de seguridad del Dr. Ébano.' },
+    { x:-135, z:-15, titulo:'Recordatorio', texto:'NO CORRER POR LOS PASILLOS.\n\n(Tampoco huir.)' },
+    { x:-52,  z:62,  titulo:'Libro de visitas', texto:'Última entrada:\n"Lucía M. — visita a Mateo M., Observación."\n\nSin hora de salida.' },
+  ],
+  lector:{ x:-326, y:52, z:42, consume:false, procedural:true },
+  puerta:{ tipo:'proc', x:-327, z:0, eje:'x', ancho:62, alto:100, salida:{ x:-327, z:0 } },
+  fuegos:[ { tipo:'pared', x:-215, z0:-140, z1:140 } ],
+  enemigos:[ { id:'custodio', x:290, z:-70, altura:1.9, vCaza:2.1 } ],
+  objetivos:[
+    { texto:'Busca algo para defenderte del fuego.',   pista:'Hay un extintor en la pared sur, junto al mostrador.', hecho:g=>g.inv.extintor },
+    { texto:'Encuentra la llave de seguridad.',        pista:'Está sobre el mostrador de recepción.', hecho:g=>g.inv.llave || g.S.abierta },
+    { texto:'¡Huye! Apaga el fuego que bloquea la salida.', pista:'Mantén clic izquierdo cerca de las llamas. El extintor también aturde a El Custodio.', hecho:g=>g.S.fuegos.every(f=>f.apagado) },
+    { texto:'Abre la puerta de salida con la llave.',  pista:'El lector está junto a la puerta, al oeste.', hecho:g=>g.S.abierta },
+    { texto:'Cruza la puerta.', pista:'', hecho:g=>false },
+  ],
+  eventos:[
+    { id:'persecucion', cond:g=>g.inv.llave,
+      accion:g=>{ g.ambiente({ color:0xa06060, nivel:.3, niebla:.07 }); g.apagon(1.6,()=>{ g.spawnEnemigo('custodio'); g.mensaje('¡Corre!',3500); }); } },
+  ],
+  victoria:{ titulo:'Nivel completado', texto:'Cruzas el umbral y la puerta se cierra de golpe. Detrás, los golpes cesan.\n\nGuardas la llave. En su reverso hay un nombre grabado: ARCHIVO CENTRAL.' },
+  alSalir:inv=>{},                                      // la llave SE CONSERVA para el nivel 3
+},
+
+/* ---------------------------- NIVEL 3 ---------------------------- */
+{
+  id:3, capitulo:'Capítulo III', titulo:'El archivo', lugar:'Archivo Central · Sótano',
+  archivo:'assets/NIVEL_3.glb',
+  ambiente:{ color:0x7f9a90, nivel:.2, niebla:.07, fondo:0x040605 },
+  spawn:{ x:-87, z:95, yaw:0 },
+  inicial:{ linterna:true, bateria:60, extintor:true, carga:100, llave:true },
+  alEntrar:inv=>{ if(inv.extintor) inv.carga=Math.max(inv.carga,70); },
+  intro:'El archivo. Estanterías, camillas… y un archivador que solo cede ante una llave.',
+  luces:[
+    { id:'gen', x:-120, y:90, z:-110, color:0xffb060, int:5, dist:11, apagada:true },
+    { id:'norte', x:-40, y:90, z:-135, color:0xff3a2a, int:2.4, dist:7, parpadeo:true },
+  ],
+  pickups:[
+    { id:'bat1', tipo:'bateria', x:-110, z:20 },
+    { id:'bat2', tipo:'bateria', x:100, z:80 },
+  ],
+  notas:[],
+  puerta:{ tipo:'proc', x:-40, z:-148, eje:'z', ancho:62, alto:100, salida:{ x:-40, z:-148 }, abreConFlag:'energia' },
+  fuegos:[],
+  enemigos:[
+    { id:'custodio', x:140, z:60,  altura:1.9, vCaza:2.3 },
+    { id:'eco',      x:60,  z:-100, altura:1.6, vCaza:1.4 },
+  ],
+  interactivos:[
+    { id:'archivador', tipo:'archivador', x:135, z:45 },
+    { id:'generador',  tipo:'generador',  x:-120, z:-120 },
+  ],
+  objetivos:[
+    { texto:'Abre el archivador con la llave.',        pista:'Está al este, junto a las estanterías.', hecho:g=>g.flag('archivoAbierto') },
+    { texto:'Lee el expediente.',                      pista:'', hecho:g=>g.flag('leido') },
+    { texto:'Arranca el generador (mantén E).',        pista:'Está en la esquina noroeste. Usa el extintor para aturdir a lo que te persigue.', hecho:g=>g.flag('energia') },
+    { texto:'Sal por la puerta Norte.',                pista:'Ya tiene energía.', hecho:g=>false },
+  ],
+  eventos:[
+    { id:'cierre', cond:g=>g.t>1.5, accion:g=>{ g.apagon(.9); g.mensaje('La puerta se cierra tras de ti.',3500); } },
+    { id:'revelacion', cond:g=>g.flag('leido'),
+      accion:g=>{ g.ambiente({ color:0x9a6a6a, nivel:.22, niebla:.08 });
+                  g.apagon(2,()=>{ g.spawnEnemigo('custodio'); g.spawnEnemigo('eco'); g.mensaje('No estás sola.',4000); }); } },
+    { id:'energia', cond:g=>g.flag('energia'),
+      accion:g=>{ g.luz('gen',true); g.ambiente({ color:0xb8c0a8, nivel:.55, niebla:.04 }); g.abrirPuerta(); g.mensaje('Hay luz. La puerta Norte está abierta.',5000); } },
+  ],
+  expediente:{ titulo:'Expediente 0613 · Confidencial',
+    texto:'HOSPITAL SAN ÉBANO — ARCHIVO CENTRAL\n\nPaciente: LUCÍA M.\nIngreso: 14/10/1998\nMotivo: visita a familiar (Mateo M., Observación).\n\nLa paciente nunca abandonó el edificio.\n\nNota del Dr. Ébano:\n"La Anomalía no es un intruso. Es lo que el hospital hizo con ella. Cada vez que despierta, el pasillo se repite y olvida."\n\nEl Custodio responde al nombre de MATEO.\n\n(a mano) Si lees esto, ya es la sexta vez.\nArranca el generador. Sal por el Norte.\nNo mires atrás.' },
+  victoria:{ titulo:'Fin', texto:'' },
+},
+];
+
+const FINAL_TXT = 'La puerta Norte da a un patio. Amanece.\n\nLucía respira aire que no recordaba. Detrás, en el cristal de la puerta, una figura alta levanta una mano… y no la sigue.\n\nPor primera vez, el pasillo no se repite.\n\nGracias por jugar.';
+const DERROTAS = ['Las luces se apagan. Despiertas de nuevo en el pasillo.','Los pasos se detienen justo detrás de ti.','Alguien susurra tu nombre. Ya es tarde.'];
+
+/* =====================================================================
+   3) MOTOR — base de Three.js, utilidades, modelos
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const V3 = (x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+$('juego').appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, .05, 120);
+scene.add(camera);
+
+const menuScene = new THREE.Scene(); menuScene.background = new THREE.Color(0x050607);
+const menuCam = new THREE.PerspectiveCamera(40, innerWidth/innerHeight, .1, 50);
+menuCam.position.set(1.2,1.45,6.2); menuCam.lookAt(1.9,1.0,0);
+
+function redimensionar(){
+  renderer.setSize(innerWidth,innerHeight);
+  camera.aspect = menuCam.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix(); menuCam.updateProjectionMatrix();
+  menuCam.position.x = innerWidth/innerHeight < 1.2 ? 0.2 : 1.2;
+}
+addEventListener('resize', redimensionar);
+document.addEventListener('fullscreenchange', redimensionar);
+
+const CL = CONFIG.linterna;
+const luzLinterna = new THREE.SpotLight(0xffe6c0, 0, CL.distancia, CL.angulo, CL.penumbra, 1.3);
+const objLuz = V3(0,0,-5);
+luzLinterna.position.set(.12,-.1,0);
+const objetivoLuz = new THREE.Object3D(); objetivoLuz.position.copy(objLuz);
+camera.add(luzLinterna, objetivoLuz); luzLinterna.target = objetivoLuz;
+
+/* ---- Textura de brillo (sprites baratos en lugar de luces) ---- */
+const texGlow = (()=>{ const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d');
+  const g=x.createRadialGradient(32,32,0,32,32,32); g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(.4,'rgba(255,255,255,.35)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  x.fillStyle=g; x.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
+function glow(color,tam){ const s=new THREE.Sprite(new THREE.SpriteMaterial({ map:texGlow, color, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false })); s.scale.set(tam,tam,1); return s; }
+
+/* ---- Carga y ajuste de modelos ---- */
+const gltfLoader = new GLTFLoader();
+const cargarGLB = (url,prog)=>new Promise((ok,err)=>gltfLoader.load(url, g=>ok(g.scene), e=>{ if(prog&&e.lengthComputable) prog(e.loaded/e.total); }, ()=>err(new Error('No se pudo cargar '+url))));
+const modelos = {};
+function fit(src,size,modo='max'){            // devuelve un grupo escalado a "size" metros; modo 'alto': pies en y=0
+  const m=src.clone(true), g=new THREE.Group(); g.add(m);
+  const s=new THREE.Box3().setFromObject(m).getSize(V3());
+  m.scale.multiplyScalar(size/(modo==='alto'?s.y:Math.max(s.x,s.y,s.z))); m.updateMatrixWorld(true);
+  const b=new THREE.Box3().setFromObject(m), c=b.getCenter(V3());
+  m.position.set(-c.x, modo==='alto'?-b.min.y:-c.y, -c.z);
+  return g;
+}
+
+/* ---- Menú 3D con tus personajes ---- */
+const menuPersonajes=[];
+function crearMenu3D(){
+  menuScene.add(new THREE.AmbientLight(0x7a8a99,.9));
+  const sp=new THREE.SpotLight(0xff3a3a,120,22,.7,.6,1.5); sp.position.set(3.5,4,4); sp.target.position.set(2,1,0); menuScene.add(sp,sp.target);
+  const sp2=new THREE.SpotLight(0x88aacc,70,22,.8,.7,1.5); sp2.position.set(-1,3,4); sp2.target.position.set(0,1,0); menuScene.add(sp2,sp2.target);
+  const p=fit(modelos.prot,1.7,'alto'); p.position.set(.6,0,0); p.rotation.y=.35;
+  const a=fit(modelos.ant,2.2,'alto'); a.position.set(3.2,0,-.8); a.rotation.y=-.4;
+  menuScene.add(p,a); menuPersonajes.push(p,a);
+  redimensionar();
+}
+
+/* =====================================================================
+   4) ESTADO DEL JUEGO
+   ===================================================================== */
+let estado='cargando';                 // menu | cargando | jugando | pausa | leyendo | victoria | derrota | final
+let nivel=0, cfg=null;
+let inv={ linterna:false, bateria:100, extintor:false, carga:0, llave:false };    // inventario que viaja entre niveles
+let invInicio={...inv};                // copia al entrar al nivel (para reiniciar)
+let S=null;                            // estado propio de CADA nivel (se recrea siempre → nada se filtra entre niveles)
+let grupoNivel=null, luzAmb=null, solidos=[], pos=V3(), yaw=0, pitch=0, pisoY=0;
+const teclas={}; let disparo=false, mantenerE=false;
+let manoLin=null, manoExt=null;
+let hudT=0, msgT=null, nivelPendiente=null;
+
+const API = {                           // lo que pueden usar los eventos de cada nivel
+  get inv(){return inv}, get S(){return S}, get t(){return S.t},
+  get xu(){return pos.x/E}, get zu(){return pos.z/E},
+  flag:k=>!!S.flags[k], set:(k,v=true)=>{ S.flags[k]=v; },
+  mensaje:(t,ms)=>mensaje(t,ms),
+  apagon:(seg,cb)=>{ S.apagon={ t:seg, cb }; },
+  entidad:d=>crearEntidad(d),
+  spawnEnemigo:id=>spawnEnemigo(id),
+  ambiente:a=>aplicarAmbiente(a),
+  luz:(id,on)=>{ const l=S.luces.find(l=>l.id===id); if(l) l.on=on; },
+  abrirPuerta:()=>abrirPuerta(),
+};
+
+/* ---- Raycasting / colisiones ---- */
+const ray=new THREE.Raycaster(); ray.firstHitOnly=true;
+const dirHit=(o,d,far,objs=solidos)=>{ ray.set(o,d); ray.far=far; return ray.intersectObjects(objs,false); };
+const UP=V3(0,1,0);
+function bloqueado(p,dir,dist){
+  const d=V3(), o=V3();
+  for(const h of [.45,.95,1.45]) for(const a of [-.6,0,.6]){
+    d.copy(dir).applyAxisAngle(UP,a); o.set(p.x,p.y+h,p.z);
+    if(dirHit(o,d,dist).length) return true;
+  }
+  return false;
+}
+const suelo=(x,y,z,desde=.7,lejos=2.4)=>{ const h=dirHit(V3(x,y+desde,z),V3(0,-1,0),lejos); return h.length?h[0]:null; };
+const pisoAt=(x,z)=>{ const h=dirHit(V3(x,pisoY+1.8,z),V3(0,-1,0),3.5); return h.length?h[0].point.y:pisoY; };
+
+/* =====================================================================
+   5) CONSTRUCCIÓN DE NIVEL
+   ===================================================================== */
+function limpiarNivel(){
+  if(grupoNivel){
+    scene.remove(grupoNivel);
+    grupoNivel.traverse(o=>{ if(o.geometry){ o.geometry.disposeBoundsTree?.(); o.geometry.dispose(); } });
+  }
+  if(luzAmb) scene.remove(luzAmb);
+  grupoNivel=null; luzAmb=null; solidos=[];
+}
+
+async function iniciarNivel(n,modo){            // modo: nuevo | preset | avance | reinicio
+  const c=NIVELES[n];
+  estado='cargando'; liberarRaton(); ocultarTodo();
+  $('hud').classList.remove('on');
+  $('cargaTit').textContent=`${c.capitulo} · ${c.titulo}`; $('cargaTxt').textContent=''; $('cargaBarra').style.width='0';
+  mostrar('carga');
+  if(modo==='nuevo'||modo==='preset') inv={...c.inicial};
+  else if(modo==='reinicio') inv={...invInicio};
+  c.alEntrar?.(inv);
+  invInicio={...inv};
+  nivel=n; cfg=c;
+  limpiarNivel();
+  let mundo;
+  try{ mundo=await cargarGLB(c.archivo,p=>{ $('cargaBarra').style.width=Math.round(p*100)+'%'; }); }
+  catch(e){ $('cargaTxt').textContent=`${e.message}. Abre el juego con un servidor local (ver instrucciones) y revisa la carpeta assets.`; return; }
+
+  /* --- estado fresco del nivel --- */
+  S={ t:0, flags:{}, hechos:new Set(), pickups:[], interactivos:[], fuegos:[], enemigos:[], entidades:[], luces:[],
+      puerta:null, abierta:false, apagon:null, luzOn:inv.linterna && inv.bateria>0, ambBase:c.ambiente.nivel,
+      gen:{ prog:0 }, ultimoAviso:0 };
+  grupoNivel=new THREE.Group(); scene.add(grupoNivel);
+  mundo.scale.setScalar(E); grupoNivel.add(mundo); grupoNivel.updateMatrixWorld(true);
+
+  /* --- atmósfera --- */
+  scene.background=new THREE.Color(c.ambiente.fondo);
+  scene.fog=new THREE.FogExp2(c.ambiente.fondo,c.ambiente.niebla);
+  luzAmb=new THREE.AmbientLight(c.ambiente.color,c.ambiente.nivel); scene.add(luzAmb);
+
+  /* --- piezas del GLB que reemplazamos / animamos --- */
+  const ocultar=[], puertaMeshes=[];
+  mundo.traverse(o=>{ if(!o.isMesh) return;
+    for(const p of c.pickups) if(p.ocultar && p.ocultar.test(o.name)) ocultar.push(o);
+    if(c.puerta?.tipo==='glb' && c.puerta.nombre.test(o.name)) puertaMeshes.push(o); });
+  ocultar.forEach(o=>{ o.visible=false; });
+  mundo.traverse(o=>{ if(o.isMesh && o.visible){ solidos.push(o); try{ o.geometry.computeBoundsTree?.(); }catch(e){} } });
+
+  /* --- suelo de referencia y jugador --- */
+  const sx=c.spawn.x*E, sz=c.spawn.z*E, h0=dirHit(V3(sx,1.8,sz),V3(0,-1,0),4);
+  pisoY=h0.length?h0[0].point.y:0;
+  pos.set(sx,pisoY,sz); yaw=c.spawn.yaw; pitch=0;
+
+  construirPuerta(c,puertaMeshes);
+  construirLector(c);
+  c.pickups.forEach(crearPickup);
+  c.notas.forEach(n=>S.interactivos.push({ pos:V3(n.x*E,pisoY,n.z*E), texto:()=>'Leer cartel', usar:()=>abrirNota(n.titulo,n.texto,false) }));
+  (c.interactivos||[]).forEach(crearInteractivo);
+  (c.fuegos||[]).forEach(f=>S.fuegos.push(crearFuego(f)));
+  (c.luces||[]).forEach(l=>{ const luz=new THREE.PointLight(l.color,0,l.dist);
+    luz.position.set(l.x*E,l.y*E,l.z*E); grupoNivel.add(luz);
+    S.luces.push({ id:l.id, luz, base:l.int, parpadeo:!!l.parpadeo, on:!l.apagada }); });
+  grupoNivel.updateMatrixWorld(true);
+
+  hudTick(true);
+  $('mantener').style.display='none';
+  $('capNum').textContent=c.capitulo; $('capTit').textContent=c.titulo; $('capLugar').textContent=c.lugar;
+  mostrar(null); $('hud').classList.add('on');
+  estado='jugando'; pedirRaton();
+  $('capitulo').classList.add('on'); setTimeout(()=>$('capitulo').classList.remove('on'),3600);
+  setTimeout(()=>{ if(S && cfg===c) mensaje(c.intro,5500); },3800);
+}
+
+/* ---- Puerta de salida y lector ---- */
+function construirPuerta(c,puertaMeshes){
+  const d=c.puerta; if(!d) return;
+  const P={ tipo:d.tipo, abierta:false, anim:0, meshes:[], salida:V3(d.salida.x*E,0,d.salida.z*E) };
+  if(d.tipo==='glb'){
+    const pivote=new THREE.Group(); pivote.position.set(d.bisagra.x*E,0,d.bisagra.z*E);
+    grupoNivel.add(pivote); pivote.updateMatrixWorld(true);
+    puertaMeshes.forEach(m=>{ pivote.attach(m); P.meshes.push(m); });
+    P.pivote=pivote; P.giro=d.giro;
+  }else{
+    const ancho=d.ancho*E, alto=d.alto*E, y=pisoAt(d.x*E,d.z*E);
+    const geo = d.eje==='x' ? new THREE.BoxGeometry(.1,alto,ancho) : new THREE.BoxGeometry(ancho,alto,.1);
+    const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({ color:0x2b3238, metalness:.6, roughness:.5 }));
+    m.position.set(d.x*E,y+alto/2,d.z*E);
+    const led=new THREE.Mesh(new THREE.BoxGeometry(d.eje==='x'?.14:.5,.07,d.eje==='x'?.5:.14),new THREE.MeshBasicMaterial({ color:0xc02020 }));
+    led.position.y=alto/2-.15; m.add(led); P.led=led; P.baseY=m.position.y; P.alto=alto;
+    grupoNivel.add(m); solidos.push(m); P.meshes.push(m);
+  }
+  S.puerta=P; P.cfg=d;
+}
+function abrirPuerta(){
+  const P=S.puerta; if(!P||P.abierta) return;
+  P.abierta=true; S.abierta=true; P.anim=0;
+  solidos=solidos.filter(m=>!P.meshes.includes(m));          // deja de ser sólida al abrirse
+  if(P.led) P.led.material.color.setHex(0x30c060);
+  if(S.lector?.led) S.lector.led.material.color.setHex(0x30c060);
+  if(S.lector) S.lector.luz.color.setHex(0x30c060);
+}
+function construirLector(c){
+  const l=c.lector; if(!l) return;
+  const luz=new THREE.PointLight(0xff3030,0,4); const p=V3(l.x*E+.1,l.y*E,l.z*E); luz.position.copy(p); grupoNivel.add(luz);
+  const led=new THREE.Mesh(new THREE.SphereGeometry(.035,10,10),new THREE.MeshBasicMaterial({ color:0xc02020 })); led.position.copy(p); grupoNivel.add(led);
+  if(l.procedural){
+    const cuerpo=new THREE.Mesh(new THREE.BoxGeometry(.1,.26,.16),new THREE.MeshStandardMaterial({ color:0x1d2124, metalness:.5, roughness:.6 }));
+    cuerpo.position.set(l.x*E+.04,l.y*E,l.z*E); grupoNivel.add(cuerpo);
+  }
+  S.lector={ luz, led };
+  S.interactivos.push({ pos:V3(l.x*E,pisoY,l.z*E),
+    texto:()=> S.abierta ? null : (inv.llave ? 'Usar la tarjeta en el lector' : 'Lector de tarjetas · necesitas una llave'),
+    usar:()=>{ if(S.abierta) return;
+      if(!inv.llave){ mensaje('El lector parpadea en rojo. Necesitas una tarjeta o llave.'); return; }
+      abrirPuerta(); if(l.consume) inv.llave=false; mensaje('Acceso concedido.'); hudTick(true); } });
+}
+
+/* ---- Pickups ---- */
+function crearPickup(d){
+  let g, y, flota=.25, color=0xffffff;
+  if(d.tipo==='linterna'){ g=fit(modelos.lin,.3); color=0xfff2cc; }
+  else if(d.tipo==='extintor'){ g=fit(modelos.ext,.5,'alto'); g.children[0].position.y+=0; color=0xff7060; }
+  else if(d.tipo==='llave'){ g=fit(modelos.tar,.24); color=0xd2a94a; }
+  else { g=new THREE.Group(); const b=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,.15,12),new THREE.MeshStandardMaterial({ color:0x2e8b57, emissive:0x1a5a35, emissiveIntensity:1.2 }));
+         const t=new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,.03,8),new THREE.MeshStandardMaterial({ color:0xcccccc })); t.position.y=.09; g.add(b,t); g.rotation.z=Math.PI/2; color=0x40ff90; }
+  const wrap=new THREE.Group(); wrap.add(g);
+  const gl=glow(color,.9); gl.position.y=.05; wrap.add(gl);
+  const x=d.x*E, z=d.z*E;
+  y = d.y!==undefined ? d.y*E : pisoAt(x,z)+(d.tipo==='extintor'?.0:flota)+(d.sobre?.3:.35);
+  if(d.tipo==='extintor' && d.y===undefined) y=pisoAt(x,z)+.05;
+  wrap.position.set(x,y,z); grupoNivel.add(wrap);
+  S.pickups.push({ d, obj:wrap, base:y, fase:Math.random()*6 });
+}
+function recoger(p){
+  const t=p.d.tipo;
+  if(t==='linterna'){ inv.linterna=true; S.luzOn=true; mensaje('Linterna obtenida. Pulsa F para encenderla o apagarla.',4500); }
+  else if(t==='bateria'){ inv.bateria=Math.min(100,inv.bateria+CL.bateriaExtra); mensaje('Batería recogida.'); }
+  else if(t==='extintor'){ inv.extintor=true; inv.carga=100; mensaje('Extintor equipado. Mantén clic izquierdo para rociar.',4500); }
+  else if(t==='llave'){ inv.llave=true; mensaje('Llave obtenida.',3500); }
+  grupoNivel.remove(p.obj); S.pickups.splice(S.pickups.indexOf(p),1); hudTick(true);
+}
+
+/* ---- Interactivos propios del nivel 3 (archivador y generador) ---- */
+function crearInteractivo(d){
+  const x=d.x*E, z=d.z*E, y=pisoAt(x,z);
+  if(d.tipo==='archivador'){
+    const g=new THREE.Group(), met=new THREE.MeshStandardMaterial({ color:0x3d4a45, metalness:.55, roughness:.55 });
+    const cuerpo=new THREE.Mesh(new THREE.BoxGeometry(.6,1.35,.55),met); cuerpo.position.y=.68; g.add(cuerpo);
+    for(let i=0;i<3;i++){ const c=new THREE.Mesh(new THREE.BoxGeometry(.52,.36,.02),new THREE.MeshStandardMaterial({ color:0x2a3430 })); c.position.set(0,.3+i*.42,.285); g.add(c);
+      const t=new THREE.Mesh(new THREE.BoxGeometry(.16,.025,.03),new THREE.MeshStandardMaterial({ color:0x8a8f8c })); t.position.set(0,.3+i*.42,.31); g.add(t); }
+    const led=new THREE.Mesh(new THREE.SphereGeometry(.025,8,8),new THREE.MeshBasicMaterial({ color:0xc02020 })); led.position.set(.2,1.28,.29); g.add(led);
+    g.position.set(x,y,z); g.rotation.y=Math.PI*.9; grupoNivel.add(g); g.updateMatrixWorld(true); solidos.push(cuerpo); cuerpo.updateMatrixWorld(true);
+    S.interactivos.push({ pos:V3(x,y,z), texto:()=> S.flags.archivoAbierto ? 'Releer el expediente' : (inv.llave?'Abrir el archivador con la llave':'Archivador cerrado · necesitas una llave'),
+      usar:()=>{ if(!S.flags.archivoAbierto && !inv.llave){ mensaje('Está cerrado con llave.'); return; }
+        if(!S.flags.archivoAbierto){ S.flags.archivoAbierto=true; led.material.color.setHex(0x30c060); }
+        abrirNota(cfg.expediente.titulo,cfg.expediente.texto,true); hudTick(true); } });
+  }else if(d.tipo==='generador'){
+    const g=new THREE.Group(), met=new THREE.MeshStandardMaterial({ color:0x4b5240, metalness:.5, roughness:.6 });
+    const cuerpo=new THREE.Mesh(new THREE.BoxGeometry(1.1,.8,.7),met); cuerpo.position.y=.45; g.add(cuerpo);
+    for(const sx of [-.3,.3]){ const c=new THREE.Mesh(new THREE.CylinderGeometry(.14,.14,.3,12),new THREE.MeshStandardMaterial({ color:0x303530 })); c.position.set(sx,.97,0); g.add(c); }
+    const led=new THREE.Mesh(new THREE.SphereGeometry(.04,8,8),new THREE.MeshBasicMaterial({ color:0xc02020 })); led.position.set(.4,.6,.36); g.add(led);
+    g.position.set(x,y,z); grupoNivel.add(g); g.updateMatrixWorld(true); solidos.push(cuerpo); cuerpo.updateMatrixWorld(true);
+    S.gen.led=led;
+    S.interactivos.push({ pos:V3(x,y,z), mantener:true,
+      texto:()=> S.flags.energia ? null : (S.flags.leido ? 'Mantén E para arrancar el generador' : 'Generador apagado'),
+      usar:()=>{} });
+  }
+}
+
+/* ---- Fuego ---- */
+function crearFuego(def){
+  const g=new THREE.Group(), llamas=[], pts=[]; let cx,cz,geo;
+  if(def.tipo==='pared'){ const z0=def.z0*E,z1=def.z1*E,x=def.x*E, n=Math.ceil(Math.abs(z1-z0)/.55);
+    for(let i=0;i<=n;i++) pts.push([x,z0+(z1-z0)*i/n]); cx=x; cz=(z0+z1)/2; geo=new THREE.BoxGeometry(.7,3,Math.abs(z1-z0)); }
+  else { const r=def.r*E; cx=def.x*E; cz=def.z*E; for(let i=0;i<7;i++){ const a=i/7*6.283; pts.push([cx+Math.cos(a)*r*.7,cz+Math.sin(a)*r*.7]); } pts.push([cx,cz]); geo=new THREE.CylinderGeometry(r,r,3,16); }
+  const y=pisoAt(cx,cz);
+  const mN=new THREE.MeshBasicMaterial({ color:0xff5a10, transparent:true, opacity:.85, blending:THREE.AdditiveBlending, depthWrite:false });
+  const mA=new THREE.MeshBasicMaterial({ color:0xffc040, transparent:true, opacity:.9, blending:THREE.AdditiveBlending, depthWrite:false });
+  pts.forEach(([px,pz])=>{ const a=new THREE.Mesh(new THREE.ConeGeometry(.3,1.3,8),mN), b=new THREE.Mesh(new THREE.ConeGeometry(.17,.85,8),mA);
+    a.position.set(px,y+.65,pz); b.position.set(px,y+.45,pz); g.add(a,b); llamas.push({ a,b,f:Math.random()*6 }); });
+  const luz=new THREE.PointLight(0xff7a2a,7,9); luz.position.set(cx,y+1,cz); g.add(luz);
+  const col=new THREE.Mesh(geo,new THREE.MeshBasicMaterial()); col.visible=false; col.position.set(cx,y+1.5,cz); g.add(col); solidos.push(col);
+  grupoNivel.add(g); g.updateMatrixWorld(true);
+  return { def,g,llamas,luz,col,vida:1,apagado:false,cx,cz };
+}
+function puntoFuego(f){ return f.def.tipo==='pared' ? V3(f.cx,0,clamp(pos.z,f.def.z0*E,f.def.z1*E)) : V3(f.cx,0,f.cz); }
+function distFuego(f){ const p=puntoFuego(f); return Math.hypot(pos.x-p.x,pos.z-p.z)-(f.def.tipo==='circulo'?f.def.r*E:0); }
+
+/* ---- Enemigos y apariciones ---- */
+function spawnEnemigo(id){
+  const d=cfg.enemigos.find(e=>e.id===id); if(!d||S.enemigos.find(e=>e.id===id)) return;
+  const g=fit(modelos.ant,d.altura,'alto'); const x=d.x*E,z=d.z*E; g.position.set(x,pisoAt(x,z),z);
+  const gl=glow(0xff2020,1.6); gl.position.set(0,d.altura*.75,.3); g.add(gl);
+  grupoNivel.add(g); S.enemigos.push({ id, g, pos:g.position, v:d.vCaza, stun:0 });
+}
+function crearEntidad(d){          // aparición breve (no hace daño): "primer encuentro"
+  const g=fit(modelos.ant,1.9,'alto'); const x=d.x*E,z=d.z*E; g.position.set(x,pisoAt(x,z),z);
+  const gl=glow(0xff2020,1.8); gl.position.set(0,1.45,.3); g.add(gl);
+  grupoNivel.add(g); S.entidades.push({ g, rest:d.seg, cerca:d.cerca });
+}
+function enemigosTick(dt){
+  let minD=99;
+  for(const e of S.enemigos){
+    e.stun=Math.max(0,e.stun-dt);
+    const dx=pos.x-e.pos.x, dz=pos.z-e.pos.z, d=Math.hypot(dx,dz); minD=Math.min(minD,d);
+    if(e.stun>0){ e.g.rotation.z=Math.sin(S.t*40)*.06; continue; } e.g.rotation.z=0;
+    let v=e.v;
+    if(S.luzOn && inv.linterna && d<7){                      // la luz lo ralentiza
+      const f=V3(); camera.getWorldDirection(f); f.y=0; f.normalize();
+      if((f.x*dx+f.z*dz)/d>.9) v*=.5;
+    }
+    const dir=V3(dx/d,0,dz/d), paso=v*dt;
+    for(const a of [0,.8,-.8,1.5,-1.5]){
+      const t=dir.clone().applyAxisAngle(UP,a);
+      if(!bloqueado(e.pos,t,.5+paso)){ e.pos.x+=t.x*paso; e.pos.z+=t.z*paso; break; }
+    }
+    const h=suelo(e.pos.x,e.pos.y,e.pos.z,.6,2.4); if(h) e.pos.y=h.point.y;
+    e.g.rotation.y=Math.atan2(dx,dz);
+    if(d<CONFIG.contactoEnemigo) return perder();
+  }
+  $('peligro').style.opacity = minD<99 ? clamp(1-minD/9,0,.9) : 0;
+}
+
+/* ---- Extintor (partículas) ---- */
+const NP=140, pPos=new Float32Array(NP*3).fill(-999), pVel=new Float32Array(NP*3), pVida=new Float32Array(NP);
+const pGeo=new THREE.BufferGeometry(); pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));
+const puntos=new THREE.Points(pGeo,new THREE.PointsMaterial({ color:0xffffff,size:.14,transparent:true,opacity:.55,depthWrite:false }));
+puntos.frustumCulled=false; scene.add(puntos); let pIdx=0;
+function emitir(o,d){ const i=(pIdx++)%NP, r=()=>(Math.random()-.5)*1.2;
+  pPos[i*3]=o.x; pPos[i*3+1]=o.y; pPos[i*3+2]=o.z;
+  pVel[i*3]=d.x*6+r(); pVel[i*3+1]=d.y*6+r(); pVel[i*3+2]=d.z*6+r(); pVida[i]=.55; }
+function particulasTick(dt){
+  for(let i=0;i<NP;i++){ if(pVida[i]>0){ pVida[i]-=dt; pPos[i*3]+=pVel[i*3]*dt; pPos[i*3+1]+=pVel[i*3+1]*dt; pPos[i*3+2]+=pVel[i*3+2]*dt; pVel[i*3+1]-=2.5*dt; } else pPos[i*3+1]=-999; }
+  pGeo.attributes.position.needsUpdate=true;
+}
+function extintorTick(dt){
+  const activo = disparo && inv.extintor && inv.carga>0 && document.pointerLockElement;
+  if(!activo) return;
+  inv.carga=Math.max(0,inv.carga-CONFIG.extintor.consumo*dt);
+  const dir=V3(); camera.getWorldDirection(dir); const o=camera.position.clone().add(dir.clone().multiplyScalar(.5)); o.y-=.25;
+  for(let k=0;k<2;k++) emitir(o,dir);
+  const fh=V3(dir.x,0,dir.z).normalize();
+  for(const f of S.fuegos){ if(f.apagado) continue;
+    const p=puntoFuego(f), dx=p.x-pos.x, dz=p.z-pos.z, d=Math.hypot(dx,dz);
+    if(d<CONFIG.extintor.alcance && (fh.x*dx+fh.z*dz)/Math.max(d,.01)>.4){
+      f.vida-=CONFIG.extintor.dañoFuego*dt;
+      if(f.vida<=0){ f.apagado=true; f.g.visible=false; f.luz.intensity=0; solidos=solidos.filter(m=>m!==f.col); mensaje('Fuego apagado.'); } } }
+  for(const e of S.enemigos){ const dx=e.pos.x-pos.x, dz=e.pos.z-pos.z, d=Math.hypot(dx,dz);
+    if(d<CONFIG.extintor.alcance && (fh.x*dx+fh.z*dz)/Math.max(d,.01)>.6) e.stun=CONFIG.extintor.aturdir; }
+  if(inv.carga<=0) mensaje('El extintor se vació.');
+}
+
+/* =====================================================================
+   6) BUCLE DE JUEGO
+   ===================================================================== */
+const reloj=new THREE.Clock(); const fwd=V3(), lado=V3(), mv=V3();
+
+function actualizar(dt){
+  S.t+=dt;
+  /* cámara con flechas (opcional) */
+  if(teclas.ArrowLeft) yaw+=1.8*dt; if(teclas.ArrowRight) yaw-=1.8*dt;
+  if(teclas.ArrowUp) pitch=Math.min(1.45,pitch+1.4*dt); if(teclas.ArrowDown) pitch=Math.max(-1.45,pitch-1.4*dt);
+
+  /* movimiento */
+  fwd.set(-Math.sin(yaw),0,-Math.cos(yaw)); lado.set(-fwd.z,0,fwd.x).negate(); mv.set(0,0,0);
+  if(teclas.KeyW) mv.add(fwd); if(teclas.KeyS) mv.sub(fwd); if(teclas.KeyD) mv.sub(lado); if(teclas.KeyA) mv.add(lado);
+  const J=CONFIG.jugador;
+  if(mv.lengthSq()>0){
+    mv.normalize(); const v=(teclas.ShiftLeft||teclas.ShiftRight?J.correr:J.caminar), dx=mv.x*v*dt, dz=mv.z*v*dt;
+    if(dx && !bloqueado(pos,V3(Math.sign(dx),0,0),J.radio+Math.abs(dx))) pos.x+=dx;
+    if(dz && !bloqueado(pos,V3(0,0,Math.sign(dz)),J.radio+Math.abs(dz))) pos.z+=dz;
+  }
+  const h=suelo(pos.x,pos.y,pos.z); if(h){ const dy=h.point.y-pos.y; pos.y+=clamp(dy,-8*dt,8*dt); if(Math.abs(dy)<.01) pos.y=h.point.y; }
+  camera.position.set(pos.x,pos.y+J.ojos+(mv.lengthSq()>0?Math.sin(performance.now()*.008)*.03:0),pos.z);
+  camera.rotation.set(pitch,yaw,0,'YXZ');
+
+  /* linterna + batería */
+  if(S.luzOn && inv.linterna){
+    inv.bateria-=CL.drenaje*dt;
+    if(inv.bateria<=0){ inv.bateria=0; S.luzOn=false; mensaje('La linterna se quedó sin batería.',4000); }
+  }
+  let fLuz = (S.luzOn && inv.linterna && !(S.apagon&&S.apagon.t>0)) ? 1 : 0;
+  if(fLuz && inv.bateria<CL.bajo && Math.random()<.12) fLuz=.15;
+  luzLinterna.intensity=CL.intensidad*fLuz;
+  manoLin.visible=inv.linterna; manoExt.visible=inv.extintor;
+
+  /* apagón escénico */
+  let fAmb=1;
+  if(S.apagon){ S.apagon.t-=dt; fAmb=Math.random()<.45?0:.2;
+    if(S.apagon.t<=0){ const cb=S.apagon.cb; S.apagon=null; fAmb=1; cb&&cb(); } }
+  luzAmb.intensity=S.ambBase*fAmb;
+  $('parpadeo').style.opacity = S.apagon ? .55 : 0;
+
+  /* luces del nivel */
+  for(const l of S.luces){ const base=l.on?l.base:0; l.luz.intensity = l.parpadeo&&l.on ? base*(Math.random()<.04?.2:(.85+.15*Math.sin(S.t*3+l.base))) : base; }
+
+  /* pickups */
+  for(let i=S.pickups.length-1;i>=0;i--){ const p=S.pickups[i];
+    p.obj.rotation.y+=dt*1.4; p.obj.position.y=p.base+Math.sin(S.t*2+p.fase)*.05;
+    if(Math.hypot(pos.x-p.obj.position.x,pos.z-p.obj.position.z)<CONFIG.distancias.recoger) recoger(p); }
+
+  /* fuegos */
+  for(const f of S.fuegos){ if(f.apagado) continue;
+    f.llamas.forEach(l=>{ const k=.85+.3*Math.sin(S.t*9+l.f); l.a.scale.set(f.vida,f.vida*k,f.vida); l.b.scale.set(f.vida,f.vida*(1.1-k*.2),f.vida); });
+    f.luz.intensity=7*f.vida*(.8+Math.random()*.4);
+    if(distFuego(f)<1.4 && S.t-S.ultimoAviso>3){ S.ultimoAviso=S.t; mensaje(inv.extintor?'Mantén clic izquierdo para rociar el extintor.':'El fuego bloquea el paso.'); } }
+
+  /* puerta animada */
+  const P=S.puerta; if(P&&P.abierta&&P.anim<1){ P.anim=Math.min(1,P.anim+dt/1.4);
+    if(P.tipo==='glb') P.pivote.rotation.y=P.giro*Math.PI*.5*P.anim; else P.meshes[0].position.y=P.baseY+P.alto*.95*P.anim; }
+
+  /* entidades (aparición) */
+  for(let i=S.entidades.length-1;i>=0;i--){ const e=S.entidades[i]; e.rest-=dt;
+    e.g.rotation.y=Math.atan2(pos.x-e.g.position.x,pos.z-e.g.position.z);
+    if(e.rest<=0 || Math.hypot(pos.x-e.g.position.x,pos.z-e.g.position.z)<e.cerca){ grupoNivel.remove(e.g); S.entidades.splice(i,1); S.apagon={ t:.7 }; } }
+
+  enemigosTick(dt); if(estado!=='jugando') return;
+  extintorTick(dt); particulasTick(dt);
+  interaccionTick(dt);
+
+  /* eventos del nivel */
+  for(const ev of cfg.eventos||[]) if(!S.hechos.has(ev.id) && ev.cond(API)){ S.hechos.add(ev.id); ev.accion(API); }
+
+  /* victoria: cruzar la puerta abierta */
+  if(P&&P.abierta&&P.anim>.6 && Math.hypot(pos.x-P.salida.x,pos.z-P.salida.z)<1.3) ganarNivel();
+
+  hudT-=dt; if(hudT<=0){ hudT=.1; hudTick(); }
+}
+
+/* ---- Interacción (E) ---- */
+function interaccionTick(dt){
+  let mejor=null, md=CONFIG.distancias.usar;
+  for(const it of S.interactivos){ const d=Math.hypot(pos.x-it.pos.x,pos.z-it.pos.z); if(d<md && it.texto()){ md=d; mejor=it; } }
+  S.cerca=mejor;
+  $('prompt').innerHTML = mejor ? `<kbd>E</kbd>${mejor.texto()}` : '';
+  const barra=$('mantener');
+  if(mejor && mejor.mantener && S.flags.leido && !S.flags.energia){
+    const G=S.gen; G.prog = mantenerE ? G.prog+dt/4 : Math.max(0,G.prog-dt/6);
+    barra.style.display='block'; $('mantenerBarra').style.width=Math.min(100,G.prog*100)+'%';
+    if(G.prog>=1){ S.flags.energia=true; G.led?.material.color.setHex(0x30c060); barra.style.display='none'; }
+  }else barra.style.display='none';
+}
+function interactuar(){
+  const it=S.cerca; if(!it||it.mantener) return;
+  it.usar();
+}
+
+/* ---- Notas ---- */
+let notaEsExpediente=false;
+function abrirNota(tit,txt,exp){ notaEsExpediente=exp; $('notaTit').textContent=tit; $('notaTxt').textContent=txt; estado='leyendo'; $('nota').classList.add('on'); }
+function cerrarNota(){
+  $('nota').classList.remove('on'); estado='jugando';
+  if(notaEsExpediente && !S.flags.leido){ S.flags.leido=true; hudTick(true); }
+  notaEsExpediente=false; if(!document.pointerLockElement) pedirRaton();
+}
+
+/* ---- Fin de partida / nivel ---- */
+function ganarNivel(){
+  if(estado!=='jugando') return; estado='victoria'; liberarRaton(); $('peligro').style.opacity=0; $('hud').classList.remove('on');
+  if(nivel===NIVELES.length-1){ $('finTxt').textContent=FINAL_TXT; mostrar('final'); return; }
+  const v=cfg.victoria; cfg.alSalir?.(inv);
+  $('vicTitulo').textContent=`${cfg.capitulo} · ${v.titulo}`; $('vicTxt').textContent=v.texto;
+  $('btnSiguiente').textContent=`Continuar al ${NIVELES[nivel+1].capitulo}`; mostrar('victoria');
+}
+function perder(){
+  if(estado!=='jugando') return; estado='derrota'; liberarRaton(); $('peligro').style.opacity=0; $('hud').classList.remove('on');
+  $('derTxt').textContent=DERROTAS[(Math.random()*DERROTAS.length)|0]; mostrar('derrota');
+}
+
+/* =====================================================================
+   7) INTERFAZ
+   ===================================================================== */
+function ocultarTodo(){ document.querySelectorAll('.pantalla').forEach(p=>p.classList.remove('on')); }
+function mostrar(id){ ocultarTodo(); if(id) $(id).classList.add('on'); }
+function mensaje(t,ms=2800){ const m=$('msg'); m.textContent=t; m.classList.add('on'); clearTimeout(msgT); msgT=setTimeout(()=>m.classList.remove('on'),ms); }
+
+const celdas=$('celdas'); for(let i=0;i<10;i++) celdas.appendChild(document.createElement('i'));
+let ultimoHUD='';
+function hudTick(forzar){
+  if(!cfg||!S) return;
+  const obj=cfg.objetivos.find(o=>!o.hecho(API))||cfg.objetivos[cfg.objetivos.length-1];
+  const bat=Math.ceil(inv.bateria/10);
+  const firma=[obj.texto,bat,inv.linterna,S.luzOn,inv.extintor,Math.round(inv.carga),inv.llave].join('|');
+  if(!forzar && firma===ultimoHUD) return; ultimoHUD=firma;
+  $('objTxt').textContent=obj.texto; $('objPista').textContent=obj.pista||'';
+  $('pausaObj').textContent=`${cfg.capitulo} · ${cfg.titulo}\n${obj.texto}`;
+  [...celdas.children].forEach((c,i)=>c.classList.toggle('on',inv.linterna && i<bat));
+  celdas.classList.toggle('baja',inv.bateria<CL.bajo); celdas.classList.toggle('parp',inv.linterna&&S.luzOn&&inv.bateria<CL.bajo);
+  $('filaLin').style.opacity = inv.linterna ? (S.luzOn?1:.55) : .35;
+  $('pctLin').textContent = inv.linterna ? Math.round(inv.bateria)+'%'+(S.luzOn?'':' · off') : '—';
+  $('filaExt').style.display = inv.extintor ? 'flex' : 'none';
+  $('extBarra').style.width=inv.carga+'%'; $('pctExt').textContent=Math.round(inv.carga)+'%'; $('filaExt').classList.toggle('rojo',inv.carga<20);
+  $('llaveIcono').classList.toggle('on',inv.llave); $('llaveTxt').classList.toggle('on',inv.llave); $('llaveTxt').textContent = inv.llave?'obtenida':'no tienes';
+}
+
+/* ---- Ratón, pausa, teclado ---- */
+function pedirRaton(){ try{ const p=renderer.domElement.requestPointerLock?.(); p&&p.catch&&p.catch(()=>{}); }catch(e){} }
+function liberarRaton(){ if(document.pointerLockElement) document.exitPointerLock(); }
+renderer.domElement.addEventListener('click',()=>{ if(estado==='jugando'&&!document.pointerLockElement) pedirRaton(); });
+addEventListener('mousemove',e=>{ if(document.pointerLockElement!==renderer.domElement||estado!=='jugando') return;
+  yaw-=e.movementX*CONFIG.jugador.sens; pitch=clamp(pitch-e.movementY*CONFIG.jugador.sens,-1.45,1.45); });
+addEventListener('mousedown',e=>{ if(e.button===0) disparo=true; });
+addEventListener('mouseup',e=>{ if(e.button===0) disparo=false; });
+document.addEventListener('pointerlockchange',()=>{
+  const bloqueado=!!document.pointerLockElement;
+  $('pistaClic').style.display = (estado==='jugando'&&!bloqueado)?'block':'none';
+  if(!bloqueado){ if(estado==='jugando') pausar(); else if(estado==='leyendo'){ $('nota').classList.remove('on'); estado='jugando'; pausar(); } }
+});
+function pausar(){ if(estado!=='jugando') return; estado='pausa'; disparo=false; mantenerE=false; mostrar('pausa'); }
+function reanudar(){ estado='jugando'; mostrar(null); pedirRaton(); }
+function volverMenu(){ estado='menu'; liberarRaton(); $('hud').classList.remove('on'); $('peligro').style.opacity=0; limpiarNivel(); mostrar('menu'); }
+
+addEventListener('keydown',e=>{
+  teclas[e.code]=true;
+  if(e.code==='KeyE') mantenerE=true;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+  if(e.repeat) return;
+  if(estado==='jugando'){
+    if(e.code==='KeyE') interactuar();
+    else if(e.code==='KeyF'){ if(!inv.linterna) mensaje('Aún no tienes linterna.'); else if(inv.bateria<=0) mensaje('Sin batería.'); else{ S.luzOn=!S.luzOn; hudTick(true); } }
+    else if(e.code==='Escape') pausar();
+  }else if(estado==='leyendo' && (e.code==='KeyE'||e.code==='Enter')) cerrarNota();
+  else if(estado==='pausa' && e.code==='Escape') reanudar();
+});
+addEventListener('keyup',e=>{ teclas[e.code]=false; if(e.code==='KeyE') mantenerE=false; });
+$('nota').addEventListener('click',()=>{ if(estado==='leyendo') cerrarNota(); });
+addEventListener('blur',()=>{ for(const k in teclas) teclas[k]=false; disparo=false; mantenerE=false; });
+
+/* ---- Botones ---- */
+let volverA='menu';
+function pantallaCompleta(){ if(!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(()=>{}); else document.exitFullscreen?.(); }
+$('btnJugar').onclick=()=>iniciarNivel(0,'nuevo');
+document.querySelectorAll('[data-cap]').forEach(b=>b.onclick=()=>iniciarNivel(+b.dataset.cap,'preset'));
+$('btnInstr').onclick=()=>{ volverA='menu'; mostrar('instrucciones'); };
+$('btnInstrPausa').onclick=()=>{ volverA='pausa'; mostrar('instrucciones'); };
+$('btnInstrVolver').onclick=()=>mostrar(volverA);
+$('btnFS').onclick=$('btnFS2').onclick=pantallaCompleta;
+$('btnContinuar').onclick=reanudar;
+$('btnReiniciar').onclick=()=>iniciarNivel(nivel,'reinicio');
+$('btnReintentar').onclick=()=>iniciarNivel(nivel,'reinicio');
+$('btnSiguiente').onclick=()=>iniciarNivel(nivel+1,'avance');
+['btnMenuPausa','btnMenuVic','btnMenuDer','btnMenuFin'].forEach(id=>$(id).onclick=volverMenu);
+
+/* =====================================================================
+   8) ARRANQUE
+   ===================================================================== */
+const t0=()=>{ const t=performance.now()/1000;
+  menuPersonajes.forEach((m,i)=>{ m.rotation.y=(i?-.4:.35)+Math.sin(t*.45+i)*.18; }); };
+renderer.setAnimationLoop(()=>{
+  const dt=Math.min(reloj.getDelta(),.05);
+  if(estado==='jugando') actualizar(dt);
+  else if(estado==='leyendo'||estado==='pausa'){ /* congelado */ }
+  if(estado==='menu'||estado==='cargando'&&!grupoNivel){ t0(); renderer.render(menuScene,menuCam); }
+  else if(grupoNivel) renderer.render(scene,camera);
+});
+
+(async function arrancar(){
+  mostrar('carga'); $('cargaTit').textContent='Preparando…';
+  try{
+    const lista={ prot:'Protagonista', ant:'Antagonista', lin:'Linterna', ext:'extintor', tar:'tarjeta' }; let i=0;
+    for(const k in lista){ modelos[k]=await cargarGLB(`assets/${lista[k]}.glb`); $('cargaBarra').style.width=(++i/5*100)+'%'; }
+  }catch(e){ $('cargaTxt').textContent=`${e.message}. Abre el juego desde un servidor local (python -m http.server 8000) y comprueba que los .glb están en la carpeta assets.`; return; }
+  manoLin=fit(modelos.lin,.3); manoLin.position.set(.22,-.2,-.42); manoLin.rotation.set(.08,-Math.PI/2,0); manoLin.visible=false;
+  manoExt=fit(modelos.ext,.4); manoExt.position.set(-.27,-.3,-.5); manoExt.rotation.set(0,.4,0); manoExt.visible=false;
+  camera.add(manoLin,manoExt);
+  manoLin.traverse(o=>{ o.frustumCulled=false; }); manoExt.traverse(o=>{ o.frustumCulled=false; });
+  crearMenu3D(); estado='menu'; mostrar('menu');
+})();
+</script>
+</body>
+</html>
